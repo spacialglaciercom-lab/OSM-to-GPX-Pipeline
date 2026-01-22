@@ -1220,16 +1220,24 @@ function findNearestNode(lat, lng, nodeMap) {
         showLoading(true, "Fetching OSM Data...", "Loading from remote URL");
         
         try {
-            // Try direct fetch first
+            // Create AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+            
             let response;
             try {
-                response = await fetch(url);
-            } catch (corsError) {
+                response = await fetch(url, { signal: controller.signal });
+            } catch (fetchError) {
+                if (fetchError.name === 'AbortError') {
+                    throw fetchError;
+                }
                 // If CORS fails, try with a proxy
                 showLoading(true, "Fetching OSM Data...", "Trying CORS proxy...");
                 const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-                response = await fetch(proxyUrl);
+                response = await fetch(proxyUrl, { signal: controller.signal });
             }
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1243,15 +1251,21 @@ function findNearestNode(lat, lng, nodeMap) {
             }
             
             cachedOSMData = data;
-            parseOSMData(data);
+            await parseOSMData(data);
             showToast('OSM data loaded from URL!');
         } catch (err) {
             showLoading(false);
-            showToast('Failed to load: ' + err.message);
+            if (err.name === 'AbortError') {
+                showToast('Request timed out. The server took too long to respond.');
+            } else {
+                showToast('Failed to load: ' + err.message);
+            }
             console.error('URL load error:', err);
             showOverpassHelp();
         }
     }
+    
+    // Show help for getting OSM data
     
     // Show help for getting OSM data
     function showOverpassHelp() {
@@ -1276,7 +1290,7 @@ function findNearestNode(lat, lng, nodeMap) {
         const north = bounds.getNorth().toFixed(6);
         const east = bounds.getEast().toFixed(6);
         
-        const query = `[out:xml][timeout:60];
+        const query = `[out:xml][timeout:30];
 (
   way["highway"="residential"](${south},${west},${north},${east});
   way["highway"="living_street"](${south},${west},${north},${east});
@@ -1290,6 +1304,25 @@ out body;`;
         return `https://overpass-api.de/api/interpreter?data=${encodedQuery}`;
     }
     
+    // Calculate area size in km²
+    function getMapAreaSize() {
+        const bounds = map.getBounds();
+        const south = bounds.getSouth();
+        const west = bounds.getWest();
+        const north = bounds.getNorth();
+        const east = bounds.getEast();
+        
+        // Approximate calculation
+        const latDiff = Math.abs(north - south);
+        const lngDiff = Math.abs(east - west);
+        const avgLat = (north + south) / 2;
+        
+        const latKm = latDiff * 111; // ~111 km per degree latitude
+        const lngKm = lngDiff * 111 * Math.cos(avgLat * Math.PI / 180);
+        
+        return latKm * lngKm;
+    }
+    
     // Copy generated Overpass URL
     function copyOverpassURL() {
         const url = generateOverpassURL();
@@ -1300,11 +1333,69 @@ out body;`;
     }
     
     // Load from generated Overpass URL
-    function loadFromOverpass() {
+    async function loadFromOverpass() {
+        const areaSize = getMapAreaSize();
+        
+        // Warn if area is too large
+        if (areaSize > 25) {
+            const proceed = confirm(`The selected area is quite large (~${areaSize.toFixed(1)} km²).\n\nThis may take a long time or fail.\n\nRecommended: Zoom in to an area less than 10 km².\n\nContinue anyway?`);
+            if (!proceed) {
+                return;
+            }
+        }
+        
+        if (map.getZoom() < 14) {
+            const proceed = confirm(`Zoom level is low (${map.getZoom()}). This may download too much data.\n\nRecommended: Zoom to level 15 or higher.\n\nContinue anyway?`);
+            if (!proceed) {
+                return;
+            }
+        }
+        
         const url = generateOverpassURL();
         document.getElementById('input-osm-url').value = url;
         closeOverpassHelp();
-        loadFromURL(url);
+        
+        showLoading(true, "Fetching from Overpass API...", "This may take 10-30 seconds...");
+        
+        try {
+            // Create AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+            
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.text();
+            
+            // Verify it looks like OSM XML
+            if (!data.includes('<osm') && !data.includes('<node')) {
+                throw new Error('Response does not appear to be OSM XML data');
+            }
+            
+            // Check if data is empty
+            if (!data.includes('<way')) {
+                showLoading(false);
+                showToast('No roads found in this area. Try a different location.');
+                return;
+            }
+            
+            cachedOSMData = data;
+            await parseOSMData(data);
+            showToast('OSM data loaded successfully!');
+            
+        } catch (err) {
+            showLoading(false);
+            if (err.name === 'AbortError') {
+                showToast('Request timed out. Try zooming in to a smaller area.');
+            } else {
+                showToast('Failed: ' + err.message);
+            }
+            console.error('Overpass load error:', err);
+        }
     }
 
     // Initialize on DOM ready

@@ -242,6 +242,76 @@
         </div>
     </section>
 
+    <!-- Share & URL Section -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-purple-100 p-2 rounded-lg text-purple-600">
+                    <span class="material-symbols-outlined">share</span>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-800">Share & Load from URL</h3>
+                    <p class="text-xs text-slate-500">Generate shareable links or load OSM data from URL</p>
+                </div>
+            </div>
+            
+            <button onclick="copyShareURL()" 
+                    class="bg-purple-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-purple-700 transition flex items-center gap-2">
+                <span class="material-symbols-outlined text-lg">link</span>
+                Copy Share Link
+            </button>
+        </div>
+        
+        <!-- Generated Share URL Display -->
+        <div class="mb-4">
+            <label class="text-xs font-bold text-slate-500 block mb-2">SHAREABLE URL (includes map position & start point)</label>
+            <div class="flex gap-2">
+                <input type="text" id="share-url-display" readonly
+                       class="flex-1 px-4 py-3 text-sm border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
+                       onclick="this.select()">
+                <button onclick="copyShareURL()" 
+                        class="bg-slate-100 text-slate-600 px-4 py-3 rounded-lg hover:bg-slate-200 transition">
+                    <span class="material-symbols-outlined">content_copy</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Load from URL -->
+        <div class="pt-4 border-t border-slate-100">
+            <label class="text-xs font-bold text-slate-500 block mb-2">LOAD OSM DATA FROM URL</label>
+            <div class="flex gap-2">
+                <input type="url" id="input-osm-url" placeholder="https://example.com/data.osm or Overpass API URL..." 
+                       class="flex-1 px-4 py-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                       onkeypress="if(event.key === 'Enter') loadFromURL()">
+                <button onclick="loadFromURL()" 
+                        class="bg-slate-900 text-white px-5 py-3 rounded-lg text-sm font-bold hover:bg-slate-800 transition flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">cloud_download</span>
+                    Load
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">
+                Supports: Direct .osm file URLs, Overpass API endpoints, or any URL returning OSM XML data
+            </p>
+        </div>
+        
+        <!-- URL Parameters Reference -->
+        <div class="mt-4 pt-4 border-t border-slate-100">
+            <details class="text-sm">
+                <summary class="cursor-pointer text-slate-500 font-medium hover:text-slate-700">
+                    URL Parameters Reference
+                </summary>
+                <div class="mt-3 bg-slate-50 rounded-lg p-4 font-mono text-xs text-slate-600 space-y-1">
+                    <p><span class="text-purple-600">lat</span>=40.7128 — Map center latitude</p>
+                    <p><span class="text-purple-600">lng</span>=-74.006 — Map center longitude</p>
+                    <p><span class="text-purple-600">zoom</span>=14 — Map zoom level (1-19)</p>
+                    <p><span class="text-purple-600">startLat</span>=40.712 — Start point latitude</p>
+                    <p><span class="text-purple-600">startLng</span>=-74.005 — Start point longitude</p>
+                    <p><span class="text-purple-600">osmUrl</span>=https://... — Auto-load OSM data from URL</p>
+                </div>
+            </details>
+        </div>
+    </section>
+
     <!-- Map Playground -->
     <section class="relative bg-white rounded-[2.5rem] border-8 border-white shadow-2xl shadow-slate-200 overflow-hidden" id="dropZone">
         <div id="map"></div>
@@ -450,8 +520,23 @@ function findNearestNode(lat, lng, nodeMap) {
 
         // Map click handler
         map.on('click', handleMapClick);
+        
+        // Update share URL when map moves
+        map.on('moveend', updateShareURLDisplay);
+        map.on('zoomend', updateShareURLDisplay);
 
         setupDragAndDrop();
+        
+        // Initial share URL display
+        setTimeout(updateShareURLDisplay, 100);
+    }
+    
+    // Update the share URL display field
+    function updateShareURLDisplay() {
+        const urlField = document.getElementById('share-url-display');
+        if (urlField) {
+            urlField.value = generateShareURL();
+        }
     }
 
     // Handle map clicks
@@ -568,6 +653,9 @@ function findNearestNode(lat, lng, nodeMap) {
         
         showToast('Start point set successfully!');
         
+        // Update share URL display
+        updateShareURLDisplay();
+        
         // If OSM data is already loaded, recompute the circuit
         if (osmDataLoaded && cachedOSMData) {
             recomputeCircuit();
@@ -598,6 +686,9 @@ function findNearestNode(lat, lng, nodeMap) {
         }
         
         showToast('Start point cleared');
+        
+        // Update share URL display
+        updateShareURLDisplay();
         
         // Recompute if data loaded
         if (osmDataLoaded && cachedOSMData) {
@@ -971,8 +1062,100 @@ function findNearestNode(lat, lng, nodeMap) {
         document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
     }
 
+    // ========== URL PARAMETER HANDLING ==========
+    
+    // Parse URL parameters on load
+    function parseURLParameters() {
+        const params = new URLSearchParams(window.location.search);
+        
+        // Get map center and zoom
+        const lat = parseFloat(params.get('lat'));
+        const lng = parseFloat(params.get('lng'));
+        const zoom = parseInt(params.get('zoom'));
+        
+        if (!isNaN(lat) && !isNaN(lng)) {
+            map.setView([lat, lng], !isNaN(zoom) ? zoom : 14);
+        }
+        
+        // Get custom start point
+        const startLat = parseFloat(params.get('startLat'));
+        const startLng = parseFloat(params.get('startLng'));
+        
+        if (!isNaN(startLat) && !isNaN(startLng)) {
+            setStartPoint(startLat, startLng);
+        }
+        
+        // Get OSM data URL
+        const osmUrl = params.get('osmUrl');
+        if (osmUrl) {
+            loadFromURL(osmUrl);
+        }
+    }
+    
+    // Generate shareable URL with current settings
+    function generateShareURL() {
+        const baseUrl = window.location.origin + window.location.pathname;
+        const params = new URLSearchParams();
+        
+        // Add map center and zoom
+        const center = map.getCenter();
+        params.set('lat', center.lat.toFixed(6));
+        params.set('lng', center.lng.toFixed(6));
+        params.set('zoom', map.getZoom());
+        
+        // Add start point if set
+        if (customStartPoint) {
+            params.set('startLat', customStartPoint.lat.toFixed(6));
+            params.set('startLng', customStartPoint.lng.toFixed(6));
+        }
+        
+        return baseUrl + '?' + params.toString();
+    }
+    
+    // Copy share URL to clipboard
+    function copyShareURL() {
+        const url = generateShareURL();
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('Share URL copied to clipboard!');
+        });
+    }
+    
+    // Load OSM data from URL
+    async function loadFromURL(url) {
+        if (!url) {
+            url = document.getElementById('input-osm-url')?.value;
+        }
+        
+        if (!url) {
+            showToast('Please enter a URL');
+            return;
+        }
+        
+        showLoading(true, "Fetching OSM Data...", "Loading from remote URL");
+        
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.text();
+            cachedOSMData = data;
+            parseOSMData(data);
+            showToast('OSM data loaded from URL!');
+        } catch (err) {
+            showLoading(false);
+            showToast('Failed to load: ' + err.message);
+            console.error('URL load error:', err);
+        }
+    }
+
     // Initialize on DOM ready
-    document.addEventListener('DOMContentLoaded', initMap);
+    document.addEventListener('DOMContentLoaded', () => {
+        initMap();
+        // Parse URL parameters after map is ready
+        setTimeout(parseURLParameters, 500);
+    });
 </script>
 
 </body>

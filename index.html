@@ -278,11 +278,22 @@
         
         <!-- Load from URL -->
         <div class="pt-4 border-t border-slate-100">
-            <label class="text-xs font-bold text-slate-500 block mb-2">LOAD OSM DATA FROM URL</label>
+            <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-bold text-slate-500">LOAD OSM DATA FROM URL</label>
+                <button onclick="showOverpassHelp()" class="text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">help</span>
+                    How to get OSM data?
+                </button>
+            </div>
             <div class="flex gap-2">
-                <input type="url" id="input-osm-url" placeholder="https://example.com/data.osm or Overpass API URL..." 
+                <input type="url" id="input-osm-url" placeholder="https://overpass-api.de/api/interpreter?data=..." 
                        class="flex-1 px-4 py-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                        onkeypress="if(event.key === 'Enter') loadFromURL()">
+                <button onclick="loadFromOverpass()" title="Load current map view from Overpass API"
+                        class="bg-purple-600 text-white px-4 py-3 rounded-lg text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1">
+                    <span class="material-symbols-outlined text-lg">auto_awesome</span>
+                    Auto
+                </button>
                 <button onclick="loadFromURL()" 
                         class="bg-slate-900 text-white px-5 py-3 rounded-lg text-sm font-bold hover:bg-slate-800 transition flex items-center gap-2">
                     <span class="material-symbols-outlined text-lg">cloud_download</span>
@@ -290,7 +301,7 @@
                 </button>
             </div>
             <p class="text-xs text-slate-400 mt-2">
-                Supports: Direct .osm file URLs, Overpass API endpoints, or any URL returning OSM XML data
+                <strong>Tip:</strong> Click "Auto" to automatically load roads from the current map view using Overpass API.
             </p>
         </div>
         
@@ -487,6 +498,74 @@ function findNearestNode(lat, lng, nodeMap) {
         </div>
     </div>
 </footer>
+
+<!-- Overpass Help Modal -->
+<div id="overpass-help-modal" class="fixed inset-0 z-[2000] hidden">
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeOverpassHelp()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-purple-100 p-2 rounded-lg text-purple-600">
+                    <span class="material-symbols-outlined">help</span>
+                </div>
+                <h3 class="font-bold text-xl text-slate-800">How to Get OSM Data</h3>
+            </div>
+            <button onclick="closeOverpassHelp()" class="text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <div class="space-y-4 text-sm text-slate-600">
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p class="font-bold text-amber-800 mb-1">⚠️ Note:</p>
+                <p class="text-amber-700">The OSM website URL (openstreetmap.org/#map=...) is just a viewer. You need to use the <strong>Overpass API</strong> or export a <strong>.osm file</strong> to get actual data.</p>
+            </div>
+            
+            <div>
+                <h4 class="font-bold text-slate-800 mb-2">Option 1: Use Overpass API (Easiest)</h4>
+                <p class="mb-3">Click the button below to generate an Overpass API URL for the current map view:</p>
+                <div class="flex gap-2">
+                    <button onclick="loadFromOverpass()" 
+                            class="flex-1 bg-purple-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-purple-700 transition">
+                        Load Current Map Area
+                    </button>
+                    <button onclick="copyOverpassURL()" 
+                            class="bg-slate-100 text-slate-600 px-4 py-3 rounded-lg font-bold hover:bg-slate-200 transition">
+                        <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="border-t border-slate-200 pt-4">
+                <h4 class="font-bold text-slate-800 mb-2">Option 2: Export .osm File</h4>
+                <ol class="list-decimal list-inside space-y-1 text-slate-600">
+                    <li>Go to <a href="https://www.openstreetmap.org/export" target="_blank" class="text-purple-600 underline">openstreetmap.org/export</a></li>
+                    <li>Navigate to your desired area</li>
+                    <li>Click "Export" button</li>
+                    <li>Download the .osm file</li>
+                    <li>Use "Load OSM" button in this app to upload it</li>
+                </ol>
+            </div>
+            
+            <div class="border-t border-slate-200 pt-4">
+                <h4 class="font-bold text-slate-800 mb-2">Option 3: Overpass Turbo</h4>
+                <ol class="list-decimal list-inside space-y-1 text-slate-600">
+                    <li>Go to <a href="https://overpass-turbo.eu/" target="_blank" class="text-purple-600 underline">overpass-turbo.eu</a></li>
+                    <li>Run a query for your area</li>
+                    <li>Click "Export" → "Download as raw OSM data"</li>
+                    <li>Upload the file to this app</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="mt-6 pt-4 border-t border-slate-200">
+            <button onclick="closeOverpassHelp()" 
+                    class="w-full bg-slate-100 text-slate-600 px-4 py-3 rounded-lg font-bold hover:bg-slate-200 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- Toast Notification -->
 <div id="toast" class="toast">Toast message</div>
@@ -1131,15 +1210,38 @@ function findNearestNode(lat, lng, nodeMap) {
             return;
         }
         
+        // Check if user pasted OSM website URL instead of API URL
+        if (url.includes('openstreetmap.org/?') || url.includes('openstreetmap.org/#map')) {
+            showToast('That\'s the OSM viewer URL. Use the Overpass API or export .osm file instead.');
+            showOverpassHelp();
+            return;
+        }
+        
         showLoading(true, "Fetching OSM Data...", "Loading from remote URL");
         
         try {
-            const response = await fetch(url);
+            // Try direct fetch first
+            let response;
+            try {
+                response = await fetch(url);
+            } catch (corsError) {
+                // If CORS fails, try with a proxy
+                showLoading(true, "Fetching OSM Data...", "Trying CORS proxy...");
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+                response = await fetch(proxyUrl);
+            }
+            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
             const data = await response.text();
+            
+            // Verify it looks like OSM XML
+            if (!data.includes('<osm') && !data.includes('<node')) {
+                throw new Error('Response does not appear to be OSM XML data');
+            }
+            
             cachedOSMData = data;
             parseOSMData(data);
             showToast('OSM data loaded from URL!');
@@ -1147,7 +1249,62 @@ function findNearestNode(lat, lng, nodeMap) {
             showLoading(false);
             showToast('Failed to load: ' + err.message);
             console.error('URL load error:', err);
+            showOverpassHelp();
         }
+    }
+    
+    // Show help for getting OSM data
+    function showOverpassHelp() {
+        const helpModal = document.getElementById('overpass-help-modal');
+        if (helpModal) {
+            helpModal.classList.remove('hidden');
+        }
+    }
+    
+    function closeOverpassHelp() {
+        const helpModal = document.getElementById('overpass-help-modal');
+        if (helpModal) {
+            helpModal.classList.add('hidden');
+        }
+    }
+    
+    // Generate Overpass API URL from current map bounds
+    function generateOverpassURL() {
+        const bounds = map.getBounds();
+        const south = bounds.getSouth().toFixed(6);
+        const west = bounds.getWest().toFixed(6);
+        const north = bounds.getNorth().toFixed(6);
+        const east = bounds.getEast().toFixed(6);
+        
+        const query = `[out:xml][timeout:60];
+(
+  way["highway"="residential"](${south},${west},${north},${east});
+  way["highway"="living_street"](${south},${west},${north},${east});
+  way["highway"="unclassified"](${south},${west},${north},${east});
+  way["highway"="service"]["service"!="driveway"]["service"!="parking_aisle"](${south},${west},${north},${east});
+);
+(._;>;);
+out body;`;
+        
+        const encodedQuery = encodeURIComponent(query);
+        return `https://overpass-api.de/api/interpreter?data=${encodedQuery}`;
+    }
+    
+    // Copy generated Overpass URL
+    function copyOverpassURL() {
+        const url = generateOverpassURL();
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('Overpass API URL copied!');
+        });
+        document.getElementById('input-osm-url').value = url;
+    }
+    
+    // Load from generated Overpass URL
+    function loadFromOverpass() {
+        const url = generateOverpassURL();
+        document.getElementById('input-osm-url').value = url;
+        closeOverpassHelp();
+        loadFromURL(url);
     }
 
     // Initialize on DOM ready
